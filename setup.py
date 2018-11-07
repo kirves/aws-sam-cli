@@ -34,7 +34,7 @@ if os.getenv("SAM_CLI_DEV"):
     cmd_name = "samdev"
 
 setup(
-    name='aws-sam-cli',
+    name='conio-aws-sam-cli',
     version=read_version(),
     description='AWS SAM CLI is a CLI tool for local development and testing of Serverless applications',
     long_description=read('README.md'),

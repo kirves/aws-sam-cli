@@ -83,22 +83,22 @@ class LambdaRuntime(object):
             try:
 
                 # Start the container. This call returns immediately after the container starts
-                self._container_manager.run(container)
+                self._container_manager.run(container, stdout=stdout, stderr=stderr)
 
                 # Setup appropriate interrupt - timeout or Ctrl+C - before function starts executing.
                 #
                 # Start the timer **after** container starts. Container startup takes several seconds, only after which,
                 # our Lambda function code will run. Starting the timer is a reasonable approximation that function has
                 # started running.
-                timer = self._configure_interrupt(function_config.name,
-                                                  function_config.timeout,
-                                                  container,
-                                                  bool(debug_context))
+                # timer = self._configure_interrupt(function_config.name,
+                #                                   function_config.timeout,
+                #                                   container,
+                #                                   bool(debug_context))
 
                 # NOTE: BLOCKING METHOD
                 # Block the thread waiting to fetch logs from the container. This method will return after container
                 # terminates, either successfully or killed by one of the interrupt handlers above.
-                container.wait_for_logs(stdout=stdout, stderr=stderr)
+                # container.wait_for_logs(stdout=stdout, stderr=stderr)
 
             except KeyboardInterrupt:
                 # When user presses Ctrl+C, we receive a Keyboard Interrupt. This is especially very common when

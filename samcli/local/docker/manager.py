@@ -26,7 +26,7 @@ class DockerContainerPool(object):
     def register_container(self, runtime, container_id, claimed=False):
         if self._keep_empty:
             return
-        LOG.debug("Registering new container for runtime %s...", runtime)
+        LOG.info("Registering new container for runtime %s...", runtime)
         if runtime not in self._free_containers:
             self._free_containers[runtime] = set()
         if not claimed:
@@ -46,18 +46,18 @@ class DockerContainerPool(object):
         return len(self._free_containers[runtime]) > 0
 
     def claim_container(self, runtime):
-        LOG.debug("Claiming container for runtime %s...", runtime)
+        LOG.info("Claiming container for runtime %s...", runtime)
         try:
             container_id = self._free_containers[runtime].pop()
-            LOG.debug("Claiming container for runtime %s: %s...", runtime, container_id)
+            LOG.info("Claiming container for runtime %s: %s...", runtime, container_id)
             return container_id
         except KeyError:
-            LOG.debug("No container found for runtime %s...", runtime)
+            LOG.info("No container found for runtime %s...", runtime)
             return None
 
     def release_container(self, container_id):
         runtime = self._containers.get(container_id, {}).get('runtime')
-        LOG.debug("Releasing container for runtime %s: %s...", runtime, container_id)
+        LOG.info("Releasing container for runtime %s: %s...", runtime, container_id)
         if not runtime:
             return
         self._free_containers[runtime].add(container_id)
@@ -159,7 +159,7 @@ class ContainerManager(object):
             container.bootstrap()
             self.container_pool.register_container(container.runtime, container.id, claimed=True)
 
-        container.start(input_data=input_data)
+        container.start(input_data=input_data, stdout=stdout, stderr=stderr)
 
     def stop(self, container):
         """
