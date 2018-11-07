@@ -73,6 +73,7 @@ class LambdaContainer(Container):
         additional_options = LambdaContainer._get_additional_options(runtime, debug_options)
         additional_volumes = LambdaContainer._get_additional_volumes(debug_options)
         cmd = [handler]
+        self.runtime = runtime
 
         super(LambdaContainer, self).__init__(image,
                                               cmd,
@@ -174,10 +175,10 @@ class LambdaContainer(Container):
             ie. if command is ``node index.js arg1 arg2``, then this list will be ["node", "index.js", "arg1", "arg2"]
         """
 
-        if not debug_options:
-            return None
+        # if not debug_options:
+        #     return None
 
-        debug_port = debug_options.debug_port
+        debug_port = debug_options and debug_options.debug_port
         debug_args_list = []
 
         if debug_options.debug_args:
