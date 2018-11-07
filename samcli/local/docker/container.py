@@ -5,7 +5,7 @@ Representation of a generic Docker container
 import logging
 import docker
 
-from samcli.local.docker.attach_api import attach
+from samcli.local.docker.attach_api import attach, _read_socket
 from .utils import to_posix_path
 
 LOG = logging.getLogger(__name__)
@@ -69,8 +69,8 @@ class Container(object):
         # Runtime properties of the container. They won't have value until container is created or started
         self.id = None
 
-        self._sleep_entrypoint = "bash"
-        self._sleep_command = "sleep 300"
+        self._sleep_entrypoint = ["bash", "-c"]
+        self._sleep_command = ["sleep 300"]
 
     def __hash__(self):
         return hash(self.id)
@@ -183,7 +183,7 @@ class Container(object):
         # Start the container
         real_container.start()
 
-    def start(self, input_data=None):
+    def start(self, input_data=None, stdout=None, stderr=None):
         """
         Calls Docker API to start the container. The container must be created at the first place to run.
         It waits for the container to complete, fetches both stdout and stderr logs and returns through the
@@ -204,7 +204,14 @@ class Container(object):
         real_container = self.docker_client.containers.get(self.id)
 
         # Start the container
-        real_container.exec_run(self._entrypoint)
+        cmd = self._entrypoint + self._cmd
+        LOG.info("Executing command: %s", cmd)
+        _, logs_itr = real_container.exec_run(cmd, workdir=self._working_dir, environment=self._env_vars, socket=True)
+
+        if not stdout and not stderr:
+            return
+
+        self._write_container_output(_read_socket(logs_itr), stdout=stdout, stderr=stderr)
 
     def wait_for_logs(self, stdout=None, stderr=None):
 
