@@ -4,9 +4,60 @@ Provides classes that interface with Docker to create, execute and manage contai
 
 import logging
 import sys
+from contextlib import contextmanager
+
 import docker
 
 LOG = logging.getLogger(__name__)
+
+_DEFAULT_POOL_LIMIT = 4
+
+class DockerContainerPool(object):
+    def __init__(self, size_limit=_DEFAULT_POOL_LIMIT):
+        self._pool_limit = size_limit
+        self._keep_empty = size_limit == 0
+        self._free_containers = {}
+        self._containers = {}
+
+    def register_container(self, runtime, container_id, claimed=False):
+        if self._keep_empty:
+            return
+        LOG.debug("Registering new container for runtime %s...", runtime)
+        if runtime not in self._free_containers:
+            self._free_containers[runtime] = set()
+        if not claimed:
+            self._free_containers[runtime].add(container_id)
+        self._containers[container_id] = {
+            'runtime': runtime
+        }
+
+    def deregister_container(self, container_id):
+        runtime = self._containers.get(container_id, {}).get('runtime')
+        if not runtime:
+            return
+        self._free_containers[runtime].discard(container_id)
+        del self._containers[container_id]
+
+    def has_available_containers(self, runtime):
+        return len(self._free_containers[runtime]) > 0
+
+    def claim_container(self, runtime):
+        LOG.debug("Claiming container for runtime %s...", runtime)
+        try:
+            container_id = self._free_containers[runtime].pop()
+            LOG.debug("Claiming container for runtime %s: %s...", runtime, container_id)
+            return container_id
+        except KeyError:
+            LOG.debug("No container found for runtime %s...", runtime)
+            return None
+
+    def release_container(self, container_id):
+        runtime = self._containers.get(container_id, {}).get('runtime')
+        LOG.debug("Releasing container for runtime %s: %s...", runtime, container_id)
+        if not runtime:
+            return
+        self._free_containers[runtime].add(container_id)
+
 
 
 class ContainerManager(object):
@@ -32,6 +83,9 @@ class ContainerManager(object):
         self.docker_network_id = docker_network_id
         self.docker_client = docker_client or docker.from_env()
 
+        self._container_pool_size_limit = 0 if not skip_pull_image else _DEFAULT_POOL_LIMIT
+        self.container_pool = DockerContainerPool(self._container_pool_size_limit)
+
     def run(self, container, input_data=None, warm=False):
         """
         Create and run a Docker container based on the given configuration.
@@ -54,11 +108,21 @@ class ContainerManager(object):
         else:
             LOG.info("Requested to skip pulling images ...\n")
 
+        container_id = self.container_pool.claim_container(container.runtime)
+        container.id = container_id
+
+        if not container.is_running():
+            self.container_pool.deregister_container(container_id)
+            container.delete()
+            container.id = None
+
         if not container.is_created():
             # Create the container first before running.
             # Create the container in appropriate Docker network
             container.network_id = self.docker_network_id
             container.create()
+            container.bootstrap()
+            self.container_pool.register_container(container.runtime, container.id, claimed=True)
 
         container.start(input_data=input_data)
 
@@ -68,7 +132,9 @@ class ContainerManager(object):
 
         :param samcli.local.docker.container.Container container: Container to stop
         """
-        container.delete()
+        self.container_pool.release_container(container.id)
+        if self._container_pool_size_limit == 0:
+            container.delete()
 
     def pull_image(self, image_name, stream=None):
         """

@@ -69,6 +69,15 @@ class Container(object):
         # Runtime properties of the container. They won't have value until container is created or started
         self.id = None
 
+        self._sleep_entrypoint = "bash"
+        self._sleep_command = "sleep 300"
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        return self.id == other.id
+
     def create(self):
         """
         Calls Docker API to creates the Docker container instance. Creating the container does *not* run the container.
@@ -84,7 +93,8 @@ class Container(object):
         LOG.info("Mounting %s as %s:ro inside runtime container", self._host_dir, self._working_dir)
 
         kwargs = {
-            "command": self._cmd,
+            "entrypoint": self._sleep_entrypoint,
+            "command": self._sleep_command,
             "working_dir": self._working_dir,
             "volumes": {
                 self._host_dir: {
@@ -114,8 +124,8 @@ class Container(object):
         if self._exposed_ports:
             kwargs["ports"] = self._exposed_ports
 
-        if self._entrypoint:
-            kwargs["entrypoint"] = self._entrypoint
+        # if self._entrypoint:
+        #     kwargs["entrypoint"] = self._entrypoint
 
         if self._memory_limit_mb:
             # Ex: 128m => 128MB
@@ -156,6 +166,23 @@ class Container(object):
 
         self.id = None
 
+    def bootstrap(self):
+        """
+        Calls Docker API to start the container. The container must be created at the first place to run.
+        It waits for the container to complete, fetches both stdout and stderr logs and returns through the
+        given streams.
+
+        :param input_data: Optional. Input data sent to the container through container's stdin.
+        :param io.StringIO stdout: Optional. IO Stream to that receives stdout text from container.
+        :param io.StringIO stderr: Optional. IO Stream that receives stderr text from container
+        """
+
+        # Get the underlying container instance from Docker API
+        real_container = self.docker_client.containers.get(self.id)
+
+        # Start the container
+        real_container.start()
+
     def start(self, input_data=None):
         """
         Calls Docker API to start the container. The container must be created at the first place to run.
@@ -177,7 +204,7 @@ class Container(object):
         real_container = self.docker_client.containers.get(self.id)
 
         # Start the container
-        real_container.start()
+        real_container.exec_run(self._entrypoint)
 
     def wait_for_logs(self, stdout=None, stderr=None):
 
@@ -264,3 +291,6 @@ class Container(object):
         :return bool: True if the container was created
         """
         return self.id is not None
+
+    def is_running(self):
+        return self.id and self.docker_client.containers.get(self.id).status == 'running'
