@@ -207,6 +207,11 @@ class LocalApigwService(BaseLocalService):
         if not isinstance(json_output, dict):
             raise TypeError("Lambda returned %{s} instead of dict", type(json_output))
 
+        h = {**(json_output.get("headers") or {}), **(json_output.get("multiValueHeaders") or {})}
+        for i, s in enumerate(h):
+            if isinstance(h[s], list):
+                h[s] = ", ".join(h[s])
+
         status_code = json_output.get("statusCode") or 200
         headers = LocalApigwService._merge_response_headers(json_output.get("headers") or {},
                                                             json_output.get("multiValueHeaders") or {})
@@ -274,7 +279,9 @@ class LocalApigwService(BaseLocalService):
         True if the body from the request should be converted to binary, otherwise false
 
         """
-        best_match_mimetype = flask_request.accept_mimetypes.best_match(lamba_response_headers.get_all("Content-Type"))
+        # best_match_mimetype = flask_request.accept_mimetypes.best_match([lamba_response_headers["Content-Type"]])
+        content_type = lamba_response_headers['Content-Type'].split(";", 1)[0]
+        best_match_mimetype = flask_request.accept_mimetypes.best_match([content_type])
         is_best_match_in_binary_types = best_match_mimetype in binary_types or '*/*' in binary_types
 
         return best_match_mimetype and is_best_match_in_binary_types and is_base_64_encoded
