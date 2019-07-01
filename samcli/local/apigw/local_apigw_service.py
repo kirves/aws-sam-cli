@@ -193,7 +193,13 @@ class LocalApigwService(BaseLocalService):
         if not isinstance(json_output, dict):
             raise TypeError("Lambda returned %{s} instead of dict", type(json_output))
 
-        h = {**(json_output.get("headers") or {}), **(json_output.get("multiValueHeaders") or {})}
+        h = {}
+        h.update(
+            {k: v for k, v in json_output.get("headers", {}).items()}
+        )
+        h.update(
+            {k: v for k, v in json_output.get("multiValueHeaders", {}).items()}
+        )
         for i, s in enumerate(h):
             if isinstance(h[s], list):
                 h[s] = ", ".join(h[s])
