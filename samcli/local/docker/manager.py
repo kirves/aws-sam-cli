@@ -110,7 +110,7 @@ class ContainerManager(object):
             LOG.debug("Docker is not reachable", exc_info=True)
             return False
 
-    def run(self, container, input_data=None, warm=False):
+    def run(self, container, input_data=None, warm=False, stdout=None, stderr=None):
         """
         Create and run a Docker container based on the given configuration.
 
